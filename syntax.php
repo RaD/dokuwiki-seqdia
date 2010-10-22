@@ -13,6 +13,8 @@ require_once(DOKU_INC.'inc/init.php');
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
 require_once(DOKU_PLUGIN.'syntax.php');
 
+require_once 'HTTP/Request.php';
+
 class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
 
     /**
@@ -158,75 +160,37 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
      */
     function _run($data,$cache) {
       global $conf;
-      $conf['curl_timeout'] = 30;
       $conf['render_url'] = 'http://www.websequencediagrams.com/index.php';
 
-      $post_params = array('style' => 'rose',
-                           'message' => urlencode($data['data'])
-                           );
-      $post_params = sprintf('style=%s&message=%s', 'rose', urlencode($data['data']));
-
-      $renderer = curl_init();
-      dbglog($conf['render_url'], 'url');
-      dbglog($post_params, 'uri');
-      curl_setopt($renderer, CURLOPT_URL, $conf['render_url']);
-      //curl_setopt($renderer, CURLOPT_HTTPHEADER, array('Content-Type: multipart/form-data; charset=utf-8'));
-      curl_setopt($renderer, CURLOPT_HEADER, false); // do not return http headers
-      curl_setopt($renderer, CURLOPT_RETURNTRANSFER, true); // return the content of the call
-      curl_setopt($renderer, CURLOPT_POST, true);
-      curl_setopt($renderer, CURLOPT_POSTFIELDS, $post_params);
-      //curl_setopt($renderer, CURLOPT_FOLLOWLOCATION, true);
-      curl_setopt($renderer, CURLOPT_TIMEOUT, $conf['curl_timeout']);
-
-      // get info
-      $response = curl_exec($renderer);
-      if ( 0 < curl_errno($renderer) ) {
-        $info = curl_getinfo($renderer);
-        $msg = sprintf('Took %s seconds to send a request to %s', $info['total_time'], $info['url']);
-        dbglog($msg, 'error');
-        $error_no = curl_errno($renderer);
-        $error_desc = curl_error($renderer);
-        dbglog(sprintf('[%s] %s', $error_no, $error_desc), 'error');
-        dbglog('stop: 1');
-        return false;
+      $request =& new HTTP_Request($conf['render_url']);
+      $request->setMethod(HTTP_REQUEST_METHOD_POST);
+      $request->addPostData('style', 'rose');
+      $request->addPostData('message', $data['data']);
+      if (!PEAR::isError($request->sendRequest())) {
+        $response = $request->getResponseBody();
+      } else {
+        $response = "";
       }
-
-      curl_close($renderer);
 
       $json = $this->json2array($response);
 
       $imgurl = sprintf('%s%s', $conf['render_url'], $json['img']);
 
-      $renderer = curl_init();
-      curl_setopt($renderer, CURLOPT_URL, $imgurl);
-      curl_setopt($renderer, CURLOPT_RETURNTRANSFER, true);
-      curl_setopt($renderer, CURLOPT_BINARYTRANSFER, true);
-      curl_setopt($renderer, CURLOPT_TIMEOUT, $conf['curl_timeout']);
-      curl_setopt($renderer, CURLOPT_HEADER, false);
-
-      $response = curl_exec($renderer);
-
-      if ( 0 < curl_errno($renderer) ) {
-        $info = curl_getinfo($renderer);
-        $msg = sprintf('Took %s seconds to send a request to %s', $info['total_time'], $info['url']);
-        dbglog($msg, 'error');
-        $error_no = curl_errno($renderer);
-        $error_desc = curl_error($renderer);
-        dbglog(sprintf('[%s] %s', $error_no, $error_desc), 'error');
-        dbglog('stop: 1');
-        return false;
+      $request->setMethod(HTTP_REQUEST_METHOD_GET);
+      $request->setURL($imgurl);
+      $request->clearPostData();
+      if (!PEAR::isError($request->sendRequest())) {
+        $response = $request->getResponseBody();
+        $fp = @fopen($cache, 'x');
+        if ( ! $fp ) {
+          dbglog('could not open file for writing: ' . $filename, $cache);
+          return false;
+        }
+        fwrite($fp, $response);
+        fclose($fp);
+      } else {
+        $response = "";
       }
-      $fp = @fopen($cache, 'x');
-      if ( ! $fp ) {
-        dbglog('could not open file for writing: ' . $filename, $cache);
-        return false;
-      }
-      fwrite($fp, $response);
-      fclose($fp);
-
-      curl_close($renderer);
-
       return true;
     }
-
 }
