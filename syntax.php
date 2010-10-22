@@ -158,16 +158,25 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
      */
     function _run($data,$cache) {
       global $conf;
+      $conf['curl_timeout'] = 30;
+      $conf['render_url'] = 'http://www.websequencediagrams.com/index.php';
 
-      $render_url = 'http://www.websequencediagrams.com/index.php';
-      $post_params = sprintf('style=rose&message=%s', urlencode($data['data']));
+      $post_params = array('style' => 'rose',
+                           'message' => urlencode($data['data'])
+                           );
+      $post_params = sprintf('style=%s&message=%s', 'rose', urlencode($data['data']));
 
       $renderer = curl_init();
-      curl_setopt($renderer, CURLOPT_URL, $render_url);
+      dbglog($conf['render_url'], 'url');
+      dbglog($post_params, 'uri');
+      curl_setopt($renderer, CURLOPT_URL, $conf['render_url']);
+      //curl_setopt($renderer, CURLOPT_HTTPHEADER, array('Content-Type: multipart/form-data; charset=utf-8'));
+      curl_setopt($renderer, CURLOPT_HEADER, false); // do not return http headers
+      curl_setopt($renderer, CURLOPT_RETURNTRANSFER, true); // return the content of the call
       curl_setopt($renderer, CURLOPT_POST, true);
       curl_setopt($renderer, CURLOPT_POSTFIELDS, $post_params);
-      curl_setopt($renderer, CURLOPT_RETURNTRANSFER, true);
-      curl_setopt($renderer, CURLOPT_TIMEOUT, 20);
+      //curl_setopt($renderer, CURLOPT_FOLLOWLOCATION, true);
+      curl_setopt($renderer, CURLOPT_TIMEOUT, $conf['curl_timeout']);
 
       // get info
       $response = curl_exec($renderer);
@@ -186,14 +195,13 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
 
       $json = $this->json2array($response);
 
-      $imgurl = sprintf('%s%s', $render_url, $json['img']);
-      $filename = escapeshellarg($cache);
+      $imgurl = sprintf('%s%s', $conf['render_url'], $json['img']);
 
       $renderer = curl_init();
       curl_setopt($renderer, CURLOPT_URL, $imgurl);
       curl_setopt($renderer, CURLOPT_RETURNTRANSFER, true);
       curl_setopt($renderer, CURLOPT_BINARYTRANSFER, true);
-      curl_setopt($renderer, CURLOPT_TIMEOUT, 30);
+      curl_setopt($renderer, CURLOPT_TIMEOUT, $conf['curl_timeout']);
       curl_setopt($renderer, CURLOPT_HEADER, false);
 
       $response = curl_exec($renderer);
