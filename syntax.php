@@ -13,7 +13,16 @@ require_once(DOKU_INC.'inc/init.php');
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
 require_once(DOKU_PLUGIN.'syntax.php');
 
+$media_inc = '../../../inc/media.php';
+if (file_exists($media_inc)) {
+  require_once $media_inc;
+ }
+
 require_once 'HTTP/Request.php';
+
+$DOKU_DIR = realpath(dirname(__FILE__).'/../../../');
+
+require_once(sprintf('%s/%s', $DOKU_DIR, 'inc/JSON.php'));
 
 class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
 
@@ -134,25 +143,7 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
 
         // resized version
         if($w) $cache = media_resize_image($cache,'png',$w,$h);
-
         return $cache;
-    }
-
-    function json2array($bad_json) {
-      // {img: "?img=mscmO5omK", page: 0, numPages: 1, errors: []}
-      $result = false;
-      if ( preg_match('/{([^}]+)}/', $bad_json, $match) ) {
-        $keywords = preg_split('/, +/', $match[1]);
-        $result = array();
-        foreach ($keywords as $item) {
-          if ( preg_match('/([^:]+): +"(.+)"/', $item, $kw ) ) {
-            $result[$kw[1]] = $kw[2];
-          }
-        }
-      } else {
-        dbglog('not match');
-      }
-      return $result;
     }
 
     /**
@@ -172,9 +163,10 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
         $response = "";
       }
 
-      $json = $this->json2array($response);
+      $json = new JSON(JSON_LOOSE_TYPE);
+      $json_data = $json->decode($response);
 
-      $imgurl = sprintf('%s%s', $conf['render_url'], $json['img']);
+      $imgurl = sprintf('%s%s', $conf['render_url'], $json_data['img']);
 
       $request->setMethod(HTTP_REQUEST_METHOD_GET);
       $request->setURL($imgurl);
