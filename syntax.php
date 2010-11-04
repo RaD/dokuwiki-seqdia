@@ -18,11 +18,10 @@ if (file_exists($media_inc)) {
   require_once $media_inc;
  }
 
-require_once 'HTTP/Request.php';
-
 $DOKU_DIR = realpath(dirname(__FILE__).'/../../../');
 
 require_once(sprintf('%s/%s', $DOKU_DIR, 'inc/JSON.php'));
+require_once(sprintf('%s/%s', $DOKU_DIR, 'inc/HTTPClient.php'));
 
 class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
 
@@ -151,38 +150,31 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
      */
     function _run($data,$cache) {
       global $conf;
+      $http = new DokuHTTPClient();
+      $json = new JSON(JSON_LOOSE_TYPE);
+
       $conf['render_url'] = 'http://www.websequencediagrams.com/index.php';
 
-      $request =& new HTTP_Request($conf['render_url']);
-      $request->setMethod(HTTP_REQUEST_METHOD_POST);
-      $request->addPostData('style', 'rose');
-      $request->addPostData('message', $data['data']);
-      if (!PEAR::isError($request->sendRequest())) {
-        $response = $request->getResponseBody();
-      } else {
-        $response = "";
-      }
+      $response = $http->post($conf['render_url'],
+                              array('style' => 'rose',
+                                    'message' => $data['data'])
+                              );
 
-      $json = new JSON(JSON_LOOSE_TYPE);
+      //error_log('RESPONSE[1]:' . $response);
       $json_data = $json->decode($response);
 
       $imgurl = sprintf('%s%s', $conf['render_url'], $json_data['img']);
 
-      $request->setMethod(HTTP_REQUEST_METHOD_GET);
-      $request->setURL($imgurl);
-      $request->clearPostData();
-      if (!PEAR::isError($request->sendRequest())) {
-        $response = $request->getResponseBody();
-        $fp = @fopen($cache, 'x');
-        if ( ! $fp ) {
-          dbglog('could not open file for writing: ' . $filename, $cache);
-          return false;
-        }
-        fwrite($fp, $response);
-        fclose($fp);
-      } else {
-        $response = "";
+      $response = $http->get($imgurl);
+      //error_log('RESPONSE[2]:' . $response);
+
+      $fp = @fopen($cache, 'x');
+      if ( ! $fp ) {
+        dbglog('could not open file for writing: ' . $filename, $cache);
+        return false;
       }
+      fwrite($fp, $response);
+      fclose($fp);
       return true;
     }
 }
