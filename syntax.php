@@ -9,19 +9,8 @@
  */
 
 if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../').'/');
-require_once(DOKU_INC.'inc/init.php');
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
 require_once(DOKU_PLUGIN.'syntax.php');
-
-$media_inc = '../../../inc/media.php';
-if (file_exists($media_inc)) {
-  require_once $media_inc;
- }
-
-$DOKU_DIR = realpath(dirname(__FILE__).'/../../../');
-
-require_once(sprintf('%s/%s', $DOKU_DIR, 'inc/JSON.php'));
-require_once(sprintf('%s/%s', $DOKU_DIR, 'inc/HTTPClient.php'));
 
 class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
 
@@ -43,7 +32,7 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
      * Where to sort in?
      */
     function getSort(){
-        return 100;
+        return 200;
     }
 
     /**
@@ -64,7 +53,7 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
                         'data'      => '',
                         'width'     => 0,
                         'height'    => 0,
-                        'style'    => 'rose',
+                        'style'    => 'default',
                         'align'     => '',
                         'version'   => $info['date'], //force rebuild of images on update
                        );
@@ -80,25 +69,37 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
             $return['width']  = $match[1];
             $return['height'] = $match[2];
         }
-        // if(preg_match('/\b(dot|neato|twopi|circo|fdp)\b/i',$conf,$match)){
-        //     $return['layout'] = strtolower($match[1]);
-        // }
+        if(preg_match('/\b(default|rose|qsd|napkin|vs2010|mscgen|omegapple|modern-blue|earth|roundgreen)\b/i',$conf,$match)){
+             $return['style'] = strtolower($match[1]);
+        }
         if(preg_match('/\bwidth=([0-9]+)\b/i', $conf,$match)) $return['width'] = $match[1];
         if(preg_match('/\bheight=([0-9]+)\b/i', $conf,$match)) $return['height'] = $match[1];
 
-        $return['data'] = join("\n",$lines);
+        $input = join("\n",$lines);
+        $return['md5'] = md5($input); // we only pass a hash around
+
+        // store input for later use
+        io_saveFile($this->_cachename($return,'txt'),$input);
 
         return $return;
     }
 
     /**
+     * Cache file is based on parameters that influence the result image
+     */
+    function _cachename($data,$ext){
+        unset($data['width']);
+        unset($data['height']);
+        unset($data['align']);
+        return getcachename(join('x',array_values($data)),'.seqdia.'.$ext);
+    }
+
+    /**
      * Create output
-     *
-     * @todo latex support?
      */
     function render($format, &$R, $data) {
         if($format == 'xhtml'){
-            $img = $this->_imgurl($data);
+            $img = DOKU_BASE.'lib/plugins/seqdia/img.php?'.buildURLparams($data);
             $R->doc .= '<img src="'.$img.'" class="media'.$data['align'].'" alt=""';
             if($data['width'])  $R->doc .= ' width="'.$data['width'].'"';
             if($data['height']) $R->doc .= ' height="'.$data['height'].'"';
@@ -115,66 +116,58 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
     }
 
     /**
-     * Build the image URL using either our own generator
-     */
-    function _imgurl($data){
-      $img = DOKU_BASE.'lib/plugins/seqdia/img.php?'.buildURLparams($data,'&');
-      return $img;
-    }
-
-    /**
-     * Return path to created diagram graph (local only)
+     * Return path to the rendered image on our local system
      */
     function _imgfile($data){
-        $w = (int) $data['width'];
-        $h = (int) $data['height'];
-        unset($data['width']);
-        unset($data['height']);
-        unset($data['align']);
-
-        $cache = getcachename(join('x',array_values($data)),'seqdia.png');
+        $cache  = $this->_cachename($data,'png');
 
         // create the file if needed
         if(!file_exists($cache)){
-            $this->_run($data,$cache);
+            $in = $this->_cachename($data,'txt');
+            $ok = $this->_remote($data,$in,$cache);
+            if(!$ok) return false;
             clearstatcache();
         }
 
         // resized version
-        if($w) $cache = media_resize_image($cache,'png',$w,$h);
+        if($data['width']){
+            $cache = media_resize_image($cache,'png',$data['width'],$data['height']);
+        }
+
+        // something went wrong, we're missing the file
+        if(!file_exists($cache)) return false;
+
         return $cache;
     }
 
     /**
-     * Run the diagram program
+     * Render the output remotely at ditaa.org
      */
-    function _run($data,$cache) {
-      global $conf;
-      $http = new DokuHTTPClient();
-      $json = new JSON(JSON_LOOSE_TYPE);
+    function _remote($data,$in,$out){
+        if(!file_exists($in)){
+            if($conf['debug']){
+                dbglog($in,'no such seqdia input file');
+            }
+            return false;
+        }
 
-      $conf['render_url'] = 'http://www.websequencediagrams.com/index.php';
+        $http = new DokuHTTPClient();
+        $http->timeout=30;
 
-      $response = $http->post($conf['render_url'],
-                              array('style' => 'rose',
-                                    'message' => $data['data'])
-                              );
+        $pass = array();
+        $pass['style']   = $data['style'];
+        $pass['message'] = io_readFile($in);
 
-      //error_log('RESPONSE[1]:' . $response);
-      $json_data = $json->decode($response);
+        $result = $http->post('http://www.websequencediagrams.com/index.php',$pass);
+        if(!$result) return false;
 
-      $imgurl = sprintf('%s%s', $conf['render_url'], $json_data['img']);
+        $json = new JSON(JSON_LOOSE_TYPE);
+        $json_data = $json->decode($result);
 
-      $response = $http->get($imgurl);
-      //error_log('RESPONSE[2]:' . $response);
+        $img = $http->get('http://www.websequencediagrams.com/index.php'.$json_data['img']);
+        if(!$img) return false;
 
-      $fp = @fopen($cache, 'x');
-      if ( ! $fp ) {
-        dbglog('could not open file for writing: ' . $filename, $cache);
-        return false;
-      }
-      fwrite($fp, $response);
-      fclose($fp);
-      return true;
+        return io_saveFile($out,$img);
     }
+
 }
