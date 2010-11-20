@@ -6,6 +6,7 @@
  * @author     Carl-Christian Salvesen <calle@ioslo.net>
  * @author     Andreas Gohr <andi@splitbrain.org>
  * @author     Ruslan Popov <ruslan.popov@gmail.com>
+ * @author     Willi Schönborn <w.schoenborn@googlemail.com>
  */
 
 if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../').'/');
@@ -162,6 +163,7 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
         if(!$result) return false;
 
         $json = new JSON(JSON_LOOSE_TYPE);
+        $json->skipnative = true;
         $json_data = $json->decode($result);
 
         $img = $http->get('http://www.websequencediagrams.com/index.php'.$json_data['img']);
