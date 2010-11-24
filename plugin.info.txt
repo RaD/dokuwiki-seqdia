@@ -1,7 +1,7 @@
 base    seqdia
 author  Ruslan Popov
 email   ruslan.popov@gmail.com
-date    2010-10-21
+date    2010-10-24
 name    UML Sequence Diagram Plugin
 desc    Create graph UML diagrams using web service websequencediagrams.com.
 url     http://www.dokuwiki.org/plugin:seqdia
