@@ -7,6 +7,7 @@
  * @author     Andreas Gohr <andi@splitbrain.org>
  * @author     Ruslan Popov <ruslan.popov@gmail.com>
  * @author     Willi Schönborn <w.schoenborn@googlemail.com>
+ * @author     Alain D'EURVEILHER <alain.deurveilher@gmail.com>
  */
 
 if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../').'/');
@@ -54,7 +55,8 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
                         'data'      => '',
                         'width'     => 0,
                         'height'    => 0,
-                        'style'    => 'default',
+                        'style'     => 'default',
+                        'cdn'       => $this->getConf('cdn'),
                         'align'     => '',
                         'version'   => $info['date'], //force rebuild of images on update
                        );
@@ -99,7 +101,12 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
      * Create output
      */
     function render($format, &$R, $data) {
-        if($format == 'xhtml'){
+        if($data['cdn'] && ($format == 'xhtml' || $format == 'odt')){
+            $R->doc .= '<div class=wsd wsd_style="' . $data['style'] . '" ><pre>';
+            $R->doc .= io_readFile( $this->_cachename($data,'txt') );
+            $R->doc .= '</pre></div><script type="text/javascript" src="http://www.websequencediagrams.com/service.js"></script>';
+            return true;
+        } elseif($format == 'xhtml'){
             $img = DOKU_BASE.'lib/plugins/seqdia/img.php?'.buildURLparams($data);
             $R->doc .= '<img src="'.$img.'" class="media'.$data['align'].'" alt=""';
             if($data['width'])  $R->doc .= ' width="'.$data['width'].'"';
@@ -108,7 +115,7 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
             if($data['align'] == 'left')  $R->doc .= ' align="left"';
             $R->doc .= '/>';
             return true;
-        }elseif($format == 'odt'){
+        } elseif($format == 'odt'){
             $src = $this->_imgfile($data);
             $R->_odtAddImage($src,$data['width'],$data['height'],$data['align']);
             return true;
