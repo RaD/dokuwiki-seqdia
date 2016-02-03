@@ -46,7 +46,7 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
     /**
      * Handle the match
      */
-    function handle($match, $state, $pos, &$handler) {
+    function handle($match, $state, $pos, Doku_Handler $handler) {
         $info = $this->getInfo();
 
         // prepare default data
@@ -98,7 +98,7 @@ class syntax_plugin_seqdia extends DokuWiki_Syntax_Plugin {
     /**
      * Create output
      */
-    function render($format, &$R, $data) {
+    function render($format, Doku_Renderer $R, $data) {
         if($format == 'xhtml'){
             $img = DOKU_BASE.'lib/plugins/seqdia/img.php?'.buildURLparams($data);
             $R->doc .= '<img src="'.$img.'" class="media'.$data['align'].'" alt=""';
